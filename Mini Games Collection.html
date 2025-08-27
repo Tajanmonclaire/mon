@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mini Games Collection</title>
+  <style>
+    body {
+      margin: 0;
+      background: #111;
+      color: white;
+      font-family: sans-serif;
+      text-align: center;
+    }
+    canvas {
+      background: #222;
+      display: block;
+      margin: auto;
+    }
+    #menu {
+      padding: 20px;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      margin: 10px;
+      cursor: pointer;
+      border: none;
+      border-radius: 5px;
+      background: #0a84ff;
+      color: white;
+      transition: 0.2s;
+    }
+    button:hover {
+      background: #006edc;
+    }
+  </style>
+</head>
+<body>
+
+<div id="menu">
+  <h1>🎮 Mini Games</h1>
+  <button onclick="startGame('target')">Target Blaster</button>
+  <button onclick="startGame('movebox')">Move the Box</button>
+  <button onclick="startGame('dodge')">Dodge the Blocks</button>
+</div>
+
+<canvas id="gameCanvas" width="800" height="500" style="display:none;"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+let gameMode = null;
+let animationId;
+
+// ================== MENU ==================
+function startGame(mode) {
+  gameMode = mode;
+  document.getElementById('menu').style.display = 'none';
+  canvas.style.display = 'block';
+  if (mode === 'target') startTargetBlaster();
+  else if (mode === 'movebox') startMoveBox();
+  else if (mode === 'dodge') startDodgeGame();
+}
+
+// ================== GAME 1: Target Blaster ==================
+function startTargetBlaster() {
+  let player = { x: 100, y: canvas.height - 60, width: 40, height: 40, color: 'cyan', vy: 0, onGround: true };
+  let bullets = [], targets = [], keys = {}, score = 0;
+  let gravity = 0.8, bulletSpeed = 8, targetSpeed = 2, jumpStrength = -15;
+  let isRapidFire = true, lastFire = 0, slowed = false, gameOver = false;
+
+  document.onkeydown = e => {
+    keys[e.code] = true;
+    if (e.code === 'Space' && player.onGround) {
+      player.vy = jumpStrength;
+      player.onGround = false;
+    }
+    if (e.code === 'KeyR' && gameOver) reset();
+  };
+  document.onkeyup = e => keys[e.code] = false;
+  document.onmousedown = e => {
+    const now = Date.now();
+    if (e.ctrlKey && !slowed) slowed = true, setTimeout(()=>slowed=false, 5000);
+    isRapidFire = !e.shiftKey;
+    if (isRapidFire || now - lastFire > 500) {
+      bullets.push({x: player.x + player.width/2, y: player.y, width:5, height:10, color:'yellow'});
+      lastFire = now;
+    }
+  };
+
+  function spawnTarget() {
+    targets.push({x: Math.random()*(canvas.width-30), y: -30, width: 30, height: 30, color: 'red'});
+  }
+  setInterval(()=>!gameOver && spawnTarget(), 1000);
+
+  function update() {
+    player.vy += gravity;
+    player.y += player.vy;
+    if (keys['KeyA']) player.x -= 5;
+    if (keys['KeyD']) player.x += 5;
+    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+    if (player.y + player.height >= canvas.height) { player.y = canvas.height - player.height; player.vy = 0; player.onGround = true; }
+    bullets = bullets.filter(b => b.y > 0);
+    bullets.forEach(b => b.y -= bulletSpeed);
+    targets.forEach(t => t.y += slowed ? 0.5 : targetSpeed);
+    bullets.forEach((b, bi) => {
+      targets.forEach((t, ti) => {
+        if (b.x < t.x + t.width && b.x + b.width > t.x && b.y < t.y + t.height && b.y + b.height > t.y) {
+          targets.splice(ti,1); bullets.splice(bi,1); score++;
+        }
+      });
+    });
+    targets.forEach(t => { if (t.y + t.height > canvas.height) gameOver = true; });
+  }
+
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height);
+    bullets.forEach(b=>{ctx.fillStyle=b.color;ctx.fillRect(b.x,b.y,b.width,b.height);});
+    targets.forEach(t=>{ctx.fillStyle=t.color;ctx.fillRect(t.x,t.y,t.width,t.height);});
+    ctx.fillStyle="white"; ctx.fillText(`Score: ${score}`,10,20);
+    if (gameOver) {
+      ctx.font="36px sans-serif"; ctx.fillText("Game Over", canvas.width/2 - 100, canvas.height/2);
+      ctx.font="18px sans-serif"; ctx.fillText("Press R to Restart", canvas.width/2 - 80, canvas.height/2 + 30);
+    }
+  }
+
+  function loop() {
+    if (!gameOver) { update(); draw(); animationId=requestAnimationFrame(loop); }
+    else draw();
+  }
+  function reset() {
+    player.y = canvas.height - 60; bullets = []; targets = []; score = 0; gameOver = false; loop();
+  }
+  loop();
+}
+
+// ================== GAME 2: Move the Box ==================
+function startMoveBox() {
+  let box = { x: 100, y: 100, size: 50, color: 'orange' };
+  let goal = { x: 600, y: 300, size: 60, color: 'green' };
+  let dragging = false, win = false;
+
+  canvas.onmousedown = e => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+    if (mx > box.x && mx < box.x + box.size && my > box.y && my < box.y + box.size) dragging = true;
+  };
+  canvas.onmouseup = () => dragging = false;
+  canvas.onmousemove = e => {
+    if (dragging) {
+      const rect = canvas.getBoundingClientRect();
+      box.x = e.clientX - rect.left - box.size / 2;
+      box.y = e.clientY - rect.top - box.size / 2;
+    }
+  };
+
+  function update() {
+    if (box.x < goal.x + goal.size && box.x + box.size > goal.x &&
+        box.y < goal.y + goal.size && box.y + box.size > goal.y) win = true;
+  }
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = goal.color; ctx.fillRect(goal.x, goal.y, goal.size, goal.size);
+    ctx.fillStyle = box.color; ctx.fillRect(box.x, box.y, box.size, box.size);
+    if (win) { ctx.fillStyle="white"; ctx.font="30px sans-serif"; ctx.fillText("You Win!", canvas.width/2 - 50, 50); }
+  }
+  function loop() { update(); draw(); animationId=requestAnimationFrame(loop); }
+  loop();
+}
+
+// ================== GAME 3: Dodge the Blocks ==================
+function startDodgeGame() {
+  let player = { x: 375, y: 450, width: 50, height: 50, color: 'cyan' };
+  let blocks = [], keys = {}, score = 0, gameOver = false;
+
+  document.onkeydown = e => keys[e.code] = true;
+  document.onkeyup = e => keys[e.code] = false;
+
+  function spawnBlock() {
+    blocks.push({ x: Math.random()*(canvas.width-30), y: -30, width: 30, height: 30, color: 'red' });
+  }
+  setInterval(()=>!gameOver && spawnBlock(), 800);
+
+  function update() {
+    if (keys['ArrowLeft']) player.x -= 5;
+    if (keys['ArrowRight']) player.x += 5;
+    player.x = Math.max(0, Math.min(canvas.width - player.width, player.x));
+    blocks.forEach(b => b.y += 4);
+    blocks = blocks.filter(b => b.y < canvas.height);
+    score++;
+    blocks.forEach(b => {
+      if (player.x < b.x + b.width && player.x + player.width > b.x &&
+          player.y < b.y + b.height && player.y + player.height > b.y) gameOver = true;
+    });
+  }
+  function draw() {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.fillStyle = player.color; ctx.fillRect(player.x, player.y, player.width, player.height);
+    blocks.forEach(b=>{ctx.fillStyle=b.color; ctx.fillRect(b.x,b.y,b.width,b.height);});
+    ctx.fillStyle="white"; ctx.fillText(`Score: ${score}`,10,20);
+    if (gameOver) { ctx.font="36px sans-serif"; ctx.fillText("Game Over", canvas.width/2 - 100, canvas.height/2); }
+  }
+  function loop() { if (!gameOver) { update(); draw(); animationId=requestAnimationFrame(loop); } else draw(); }
+  loop();
+}
+</script>
+
+</body>
+</html>
